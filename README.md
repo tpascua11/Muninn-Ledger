@@ -75,7 +75,8 @@ npm run dev
 ### API Key
 
 Enter your z.ai API key in the **gear icon** (Prompt Configuration). It is never saved to disk : it lives only in your session and clears when you close the tab.
-(it only setup for GLM 5 for now)
+
+> Currently only supports z.ai GLM-5. More models may be added in the future.
 
 ---
 
@@ -117,6 +118,18 @@ src/
 
 ---
 
+
+## Roadmap
+
+Things that may get built, in no particular order:
+
+- Better prompt history : a more organized record of what was sent and what paper it produced
+- Visible thinking : see the model's reasoning process before the response lands
+- Real-time writing : watch the paper get written word by word as the AI responds
+- Unique paper types : papers with structured input fields based on what they are. A character sheet has different inputs than a location, a stat block, or a session log. Not everything needs to be a blank page.
+- Unique folder types : folders that attach to the AI conversation in a specific way rather than just feeding context. A folder could act as a persistent system rule, a tone modifier, or a message wrapper.
+
+---
 
 ## License
 
