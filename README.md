@@ -75,6 +75,7 @@ npm run dev
 ### API Key
 
 Enter your z.ai API key in the **gear icon** (Prompt Configuration). It is never saved to disk : it lives only in your session and clears when you close the tab.
+(it only setup for GLM 5 for now)
 
 ---
 
