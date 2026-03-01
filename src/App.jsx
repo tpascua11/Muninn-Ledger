@@ -184,7 +184,9 @@ const WritersDesk = () => {
   }, [promptText]);
 
   // ── API call ────────────────────────────────────────────────────────────────
-  const callApi = useCallback(async () => {
+          model: 'glm-5',
+  // mode: 'replace' = blind send, 'append' = chain, 'rewrite' = clear+rewrite, 'new-rewrite' = rewrite onto new paper
+  const callApiWithMode = useCallback(async (mode = 'replace') => {
     if (!promptText.trim()) return;
     if (!apiKey.trim()) {
       alert('Please set your API key in Prompt Configuration.');
@@ -193,15 +195,35 @@ const WritersDesk = () => {
     const currentProject = projectsRef.current.find(p => p.id === activeProjectIdRef.current);
     if (!currentProject || currentProject.mainStack.length === 0) return;
 
-    const targetPaperId = currentProject.mainStack[currentProject.mainStack.length - 1].id;
-    if (loadingPaperIds.has(targetPaperId)) return;
+    const targetPaper = currentProject.mainStack[currentProject.mainStack.length - 1];
+    if ((mode === 'append' || mode === 'rewrite' || mode === 'new-rewrite') && !targetPaper.content?.trim()) return;
+    if (loadingPaperIds.has(targetPaper.id)) return;
 
     const userMessage = promptText.trim();
     setPromptText('');
-    setLoadingPaperIds(prev => new Set([...prev, targetPaperId]));
+
+    // For 'new-rewrite' mode, create a fresh paper and push it to the stack first
+    const newPaperId = mode === 'new-rewrite' ? generateId() : null;
+    if (mode === 'new-rewrite') {
+      const freshPaper = {
+        id: newPaperId,
+        subject: targetPaper.subject + ' (rewrite)',
+        content: '',
+        inContext: true,
+        versions: []
+      };
+      updateActiveProject(p => ({ ...p, mainStack: [...p.mainStack, freshPaper] }));
+    }
+
+    const loadingId = mode === 'new-rewrite' ? newPaperId : targetPaper.id;
+    setLoadingPaperIds(prev => new Set([...prev, loadingId]));
     mailRef.current?.sendMail();
 
-    const { messages } = buildContextMessages(currentProject, systemPrompt, userMessage);
+    const seed = (mode === 'append' || mode === 'rewrite' || mode === 'new-rewrite')
+      ? splitOnLastDivider(targetPaper.content).seed
+      : undefined;
+
+    const { messages } = buildContextMessages(currentProject, systemPrompt, userMessage, seed);
 
     try {
       const res = await fetch('https://api.z.ai/api/coding/paas/v4/chat/completions', {
@@ -210,13 +232,7 @@ const WritersDesk = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
         },
-        body: JSON.stringify({
-          model: 'glm-5',
-          messages,
-          temperature,
-          max_tokens: maxTokens,
-          stream: false
-        }),
+        body: JSON.stringify({ model: 'glm-5', messages, temperature, max_tokens: maxTokens, stream: false }),
       });
       const responseText = await res.text();
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${responseText}`);
@@ -228,15 +244,22 @@ const WritersDesk = () => {
         const next = prev.map(p => {
           if (p.id !== activeProjectIdRef.current) return p;
           const stack = p.mainStack.map(paper => {
-            if (paper.id !== targetPaperId) return paper;
+            const isTarget = mode === 'new-rewrite' ? paper.id === newPaperId : paper.id === targetPaper.id;
+            if (!isTarget) return paper;
+            const newContent = mode === 'append'
+              ? paper.content + '\n\n---\n\n' + assistantResponse
+              : assistantResponse;
             const versions = paper.versions || [];
-            const newVersion = {
-              versionNumber: versions.length + 1,
-              subject: paper.subject,
-              content: assistantResponse,
-              savedAt: Date.now()
+            return {
+              ...paper,
+              content: newContent,
+              versions: [...versions, {
+                versionNumber: versions.length + 1,
+                subject: paper.subject,
+                content: newContent,
+                savedAt: Date.now()
+              }]
             };
-            return { ...paper, content: assistantResponse, versions: [...versions, newVersion] };
           });
           return { ...p, mainStack: stack };
         });
@@ -255,172 +278,11 @@ const WritersDesk = () => {
     } finally {
       setLoadingPaperIds(prev => {
         const next = new Set(prev);
-        next.delete(targetPaperId);
+        next.delete(loadingId);
         return next;
       });
     }
-  }, [promptText, apiKey, systemPrompt, temperature, maxTokens, loadingPaperIds, immediateSave]);
-
-  // ── Chain API call (append mode) ────────────────────────────────────────────
-  const callApiChain = useCallback(async () => {
-    if (!promptText.trim()) return;
-    if (!apiKey.trim()) {
-      alert('Please set your API key in Prompt Configuration.');
-      return;
-    }
-    const currentProject = projectsRef.current.find(p => p.id === activeProjectIdRef.current);
-    if (!currentProject || currentProject.mainStack.length === 0) return;
-
-    const targetPaper = currentProject.mainStack[currentProject.mainStack.length - 1];
-    if (!targetPaper.content?.trim()) return;
-    if (loadingPaperIds.has(targetPaper.id)) return;
-
-    const userMessage = promptText.trim();
-    setPromptText('');
-    setLoadingPaperIds(prev => new Set([...prev, targetPaper.id]));
-    mailRef.current?.sendMail();
-
-    const { seed } = splitOnLastDivider(targetPaper.content);
-    const { messages } = buildContextMessages(currentProject, systemPrompt, userMessage, seed);
-
-    try {
-      const res = await fetch('https://api.z.ai/api/coding/paas/v4/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'glm-5',
-          messages,
-          temperature,
-          max_tokens: maxTokens,
-          stream: false
-        }),
-      });
-      const responseText = await res.text();
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${responseText}`);
-      const data = JSON.parse(responseText);
-      const assistantResponse = data.choices?.[0]?.message?.content;
-      if (!assistantResponse) throw new Error('Unexpected response format.');
-
-      setProjects(prev => {
-        const next = prev.map(p => {
-          if (p.id !== activeProjectIdRef.current) return p;
-          const stack = p.mainStack.map(paper => {
-            if (paper.id !== targetPaper.id) return paper;
-            const newContent = paper.content + '\n\n---\n\n' + assistantResponse;
-            const versions = paper.versions || [];
-            const newVersion = {
-              versionNumber: versions.length + 1,
-              subject: paper.subject,
-              content: newContent,
-              savedAt: Date.now()
-            };
-            return { ...paper, content: newContent, versions: [...versions, newVersion] };
-          });
-          return { ...p, mainStack: stack };
-        });
-        immediateSave(next, activeProjectIdRef.current);
-        return next;
-      });
-
-      mailRef.current?.receiveMail();
-      setSaveStatus('saved');
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => setSaveStatus('clean'), 2000);
-      setIsDirty(false);
-    } catch (e) {
-      console.error('API Chain Error:', e);
-      handleApiError(e);
-    } finally {
-      setLoadingPaperIds(prev => {
-        const next = new Set(prev);
-        next.delete(targetPaper.id);
-        return next;
-      });
-    }
-  }, [promptText, apiKey, systemPrompt, temperature, maxTokens, loadingPaperIds, immediateSave]);
-
-  // ── Clear + Rewrite API call ─────────────────────────────────────────────────
-  const callApiClearRewrite = useCallback(async () => {
-    if (!promptText.trim()) return;
-    if (!apiKey.trim()) {
-      alert('Please set your API key in Prompt Configuration.');
-      return;
-    }
-    const currentProject = projectsRef.current.find(p => p.id === activeProjectIdRef.current);
-    if (!currentProject || currentProject.mainStack.length === 0) return;
-
-    const targetPaper = currentProject.mainStack[currentProject.mainStack.length - 1];
-    if (!targetPaper.content?.trim()) return;
-    if (loadingPaperIds.has(targetPaper.id)) return;
-
-    const userMessage = promptText.trim();
-    setPromptText('');
-    setLoadingPaperIds(prev => new Set([...prev, targetPaper.id]));
-    mailRef.current?.sendMail();
-
-    const { seed } = splitOnLastDivider(targetPaper.content);
-    const { messages } = buildContextMessages(currentProject, systemPrompt, userMessage, seed);
-
-    try {
-      const res = await fetch('https://api.z.ai/api/coding/paas/v4/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'glm-5',
-          messages,
-          temperature,
-          max_tokens: maxTokens,
-          stream: false
-        }),
-      });
-      const responseText = await res.text();
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${responseText}`);
-      const data = JSON.parse(responseText);
-      const assistantResponse = data.choices?.[0]?.message?.content;
-      if (!assistantResponse) throw new Error('Unexpected response format.');
-
-      setProjects(prev => {
-        const next = prev.map(p => {
-          if (p.id !== activeProjectIdRef.current) return p;
-          const stack = p.mainStack.map(paper => {
-            if (paper.id !== targetPaper.id) return paper;
-            const versions = paper.versions || [];
-            const newVersion = {
-              versionNumber: versions.length + 1,
-              subject: paper.subject,
-              content: assistantResponse,
-              savedAt: Date.now()
-            };
-            return { ...paper, content: assistantResponse, versions: [...versions, newVersion] };
-          });
-          return { ...p, mainStack: stack };
-        });
-        immediateSave(next, activeProjectIdRef.current);
-        return next;
-      });
-
-      mailRef.current?.receiveMail();
-      setSaveStatus('saved');
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => setSaveStatus('clean'), 2000);
-      setIsDirty(false);
-    } catch (e) {
-      console.error('API Clear+Rewrite Error:', e);
-      handleApiError(e);
-    } finally {
-      setLoadingPaperIds(prev => {
-        const next = new Set(prev);
-        next.delete(targetPaper.id);
-        return next;
-      });
-    }
-  }, [promptText, apiKey, systemPrompt, temperature, maxTokens, loadingPaperIds, immediateSave]);
+  }, [promptText, apiKey, systemPrompt, temperature, maxTokens, loadingPaperIds, immediateSave, updateActiveProject]);
 
   // ── Drag & drop ─────────────────────────────────────────────────────────────
   const handleMouseMove = useCallback((e) => {
@@ -1048,50 +910,58 @@ const WritersDesk = () => {
                     <line x1="21" y1="21" x2="16.65" y2="16.65"/>
                   </svg>
                 </button>
-                {!topPaper?.content?.trim() ? (
-                  /* Paper is empty — normal blind send */
-                  <button
-                    className="prompt-send-btn"
-                    onClick={callApi}
-                    disabled={loadingPaperIds.has(topPaper?.id) || !promptText.trim()}
-                    title="Send"
-                    style={{ opacity: (loadingPaperIds.has(topPaper?.id) || !promptText.trim()) ? 0.35 : 1 }}
-                  >
+                {/* LEFT — Send (empty paper) or Append (has content) */}
+                <button
+                  className="prompt-send-btn"
+                  onClick={() => callApiWithMode(topPaper?.content?.trim() ? 'append' : 'replace')}
+                  disabled={loadingPaperIds.has(topPaper?.id) || !promptText.trim()}
+                  title={topPaper?.content?.trim() ? 'Append — adds below divider' : 'Send'}
+                  style={{ opacity: (loadingPaperIds.has(topPaper?.id) || !promptText.trim()) ? 0.35 : 1 }}
+                >
+                  {topPaper?.content?.trim() ? (
+                    /* Append icon — chain links */
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                  ) : (
+                    /* Send icon */
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <line x1="22" y1="2" x2="11" y2="13"/>
                       <polygon points="22 2 15 22 11 13 2 9 22 2"/>
                     </svg>
-                  </button>
-                ) : (
-                  <>
-                    {/* Clear + Rewrite */}
-                    <button
-                      className="prompt-send-btn"
-                      onClick={callApiClearRewrite}
-                      disabled={loadingPaperIds.has(topPaper?.id) || !promptText.trim()}
-                      title="Clear + Rewrite — reads paper, writes fresh"
-                      style={{ opacity: (loadingPaperIds.has(topPaper?.id) || !promptText.trim()) ? 0.35 : 1 }}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M23 4v6h-6"/>
-                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                      </svg>
-                    </button>
-                    {/* Chain */}
-                    <button
-                      className="prompt-send-btn"
-                      onClick={callApiChain}
-                      disabled={loadingPaperIds.has(topPaper?.id) || !promptText.trim()}
-                      title="Chain — reads paper, appends below divider"
-                      style={{ opacity: (loadingPaperIds.has(topPaper?.id) || !promptText.trim()) ? 0.35 : 1 }}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-                      </svg>
-                    </button>
-                  </>
-                )}
+                  )}
+                </button>
+
+                {/* MIDDLE — New Rewrite (writes onto a fresh paper) */}
+                <button
+                  className="prompt-send-btn"
+                  onClick={() => callApiWithMode('new-rewrite')}
+                  disabled={loadingPaperIds.has(topPaper?.id) || !promptText.trim() || !topPaper?.content?.trim()}
+                  title="New Rewrite — rewrites onto a fresh paper"
+                  style={{ opacity: (loadingPaperIds.has(topPaper?.id) || !promptText.trim() || !topPaper?.content?.trim()) ? 0.35 : 1 }}
+                >
+                  {/* Quill writing onto a new page */}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M12 20h9"/>
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    <path d="M15 5l3 3"/>
+                  </svg>
+                </button>
+
+                {/* RIGHT — Rewrite in place */}
+                <button
+                  className="prompt-send-btn"
+                  onClick={() => callApiWithMode('rewrite')}
+                  disabled={loadingPaperIds.has(topPaper?.id) || !promptText.trim() || !topPaper?.content?.trim()}
+                  title="Rewrite — clears and rewrites in place"
+                  style={{ opacity: (loadingPaperIds.has(topPaper?.id) || !promptText.trim() || !topPaper?.content?.trim()) ? 0.35 : 1 }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M23 4v6h-6"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
