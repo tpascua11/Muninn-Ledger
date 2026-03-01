@@ -237,8 +237,7 @@ body { font-family: 'DM Sans', sans-serif; overflow: hidden; background: #2c2416
 .subject-input:focus { border-bottom-color: rgba(139, 69, 19, 0.5); }
 .subject-input::placeholder { color: rgba(62, 50, 40, 0.4); font-style: italic; }
 
-.paper-textarea { background: transparent; border: none; outline: none; resize: none; line-height: 24px; color: var(--scroll-text); font-size: 1.00rem; flex-grow: 1; height: 100%; overflow-y: auto; box-shadow: none; -webkit-box-shadow: none; }
-.paper-textarea::-webkit-scrollbar { width: 6px; }
+.paper-textarea { background: transparent; border: none; outline: none; resize: none; line-height: 1.6; color: var(--scroll-text); font-size: 1.00rem; font-family: 'Crimson Pro', serif; flex-grow: 1; height: 100%; overflow-y: auto; box-shadow: none; -webkit-box-shadow: none; }.paper-textarea::-webkit-scrollbar { width: 6px; }
 .paper-textarea::-webkit-scrollbar-track { background: transparent; }
 .paper-textarea::-webkit-scrollbar-thumb { background: rgba(139, 69, 19, 0.25); border-radius: 3px; }
 
