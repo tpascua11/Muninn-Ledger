@@ -39,6 +39,11 @@ const WritersDesk = () => {
   const mailRef = useRef(null);
   const promptBarRef = useRef(null);
 
+  // ── Typewriter queue ────────────────────────────────────────────────────────
+  const typeQueueRef = useRef([]);       // pending characters to render
+  const typeDrainerRef = useRef(null);   // setTimeout handle
+  const typeTargetRef = useRef(null);    // { paperId, base } for current stream
+
   useEffect(() => { projectsRef.current = projects; }, [projects]);
   useEffect(() => { activeProjectIdRef.current = activeProjectId; }, [activeProjectId]);
 
@@ -238,15 +243,87 @@ const WritersDesk = () => {
           messages,
           temperature,
           max_tokens: maxTokens,
-          stream: false,
+          stream: true,
           thinking: { type: thinkingEnabled ? 'enabled' : 'disabled' }
         }),
       });
-      const responseText = await res.text();
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${responseText}`);
-      const data = JSON.parse(responseText);
-      const assistantResponse = data.choices?.[0]?.message?.content;
-      if (!assistantResponse) throw new Error('Unexpected response format.');
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`${res.status} ${res.statusText}: ${errText}`);
+      }
+
+      // ── Stream reading ──────────────────────────────────────────────────────────────────────────
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = ''; // incomplete SSE line buffer
+
+      const prefix = mode === 'append' ? '\n\n---\n\n' : '';
+      const base = mode === 'append' ? targetPaper.content + prefix : '';
+      const writePaperId = mode === 'new-rewrite' ? newPaperId : targetPaper.id;
+
+      // Set up typewriter queue for this stream
+      typeQueueRef.current = [];
+      typeTargetRef.current = { paperId: writePaperId, base };
+      let renderedSoFar = '';
+
+      const drainOne = () => {
+        if (typeQueueRef.current.length === 0) {
+          typeDrainerRef.current = null;
+          return;
+        }
+        const char = typeQueueRef.current.shift();
+        renderedSoFar += char;
+        const snapshot = renderedSoFar;
+        const target = typeTargetRef.current;
+        setProjects(prev => prev.map(p => {
+          if (p.id !== activeProjectIdRef.current) return p;
+          return {
+            ...p, mainStack: p.mainStack.map(paper => {
+              if (paper.id !== target.paperId) return paper;
+              return { ...paper, content: target.base + snapshot };
+            })
+          };
+        }));
+        typeDrainerRef.current = setTimeout(drainOne, 16);
+      };
+
+      const kickDrainer = () => {
+        if (!typeDrainerRef.current) drainOne();
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          const jsonStr = trimmed.slice(5).trim();
+          if (jsonStr === '[DONE]') continue;
+          try {
+            const chunk = JSON.parse(jsonStr);
+            const token = chunk.choices?.[0]?.delta?.content;
+            if (!token) continue;
+            for (const char of token) typeQueueRef.current.push(char);
+            kickDrainer();
+          } catch { /* malformed chunk — skip */ }
+        }
+      }
+
+      // ── Stream complete: flush remaining queue instantly then save ─────────────────────
+      if (typeDrainerRef.current) {
+        clearTimeout(typeDrainerRef.current);
+        typeDrainerRef.current = null;
+      }
+      renderedSoFar += typeQueueRef.current.join('');
+      typeQueueRef.current = [];
+
+      const finalContent = base + renderedSoFar;
 
       setProjects(prev => {
         const next = prev.map(p => {
@@ -254,17 +331,14 @@ const WritersDesk = () => {
           const stack = p.mainStack.map(paper => {
             const isTarget = mode === 'new-rewrite' ? paper.id === newPaperId : paper.id === targetPaper.id;
             if (!isTarget) return paper;
-            const newContent = mode === 'append'
-              ? paper.content + '\n\n---\n\n' + assistantResponse
-              : assistantResponse;
             const versions = paper.versions || [];
             return {
               ...paper,
-              content: newContent,
+              content: finalContent,
               versions: [...versions, {
                 versionNumber: versions.length + 1,
                 subject: paper.subject,
-                content: newContent,
+                content: finalContent,
                 savedAt: Date.now()
               }]
             };
