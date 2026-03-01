@@ -159,7 +159,8 @@ const WritersDesk = () => {
   const defaultAiSettings = {
     systemPrompt: 'You are a helpful AI writing assistant. Help the user write, edit, and improve their work.',
     temperature: 0.7,
-    maxTokens: 131072
+    maxTokens: 131072,
+    thinkingEnabled: false
   };
   const aiSettings = (activeProject && activeProject.aiSettings)
     ? activeProject.aiSettings
@@ -167,6 +168,7 @@ const WritersDesk = () => {
   const systemPrompt = aiSettings.systemPrompt;
   const temperature = aiSettings.temperature;
   const maxTokens = aiSettings.maxTokens;
+  const thinkingEnabled = aiSettings.thinkingEnabled ?? false;
 
   const updateAiSettings = (patch) => {
     updateActiveProject(p => ({
@@ -184,7 +186,6 @@ const WritersDesk = () => {
   }, [promptText]);
 
   // ── API call ────────────────────────────────────────────────────────────────
-          model: 'glm-5',
   // mode: 'replace' = blind send, 'append' = chain, 'rewrite' = clear+rewrite, 'new-rewrite' = rewrite onto new paper
   const callApiWithMode = useCallback(async (mode = 'replace') => {
     if (!promptText.trim()) return;
@@ -232,7 +233,14 @@ const WritersDesk = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
         },
-        body: JSON.stringify({ model: 'glm-5', messages, temperature, max_tokens: maxTokens, stream: false }),
+        body: JSON.stringify({
+          model: 'glm-5',
+          messages,
+          temperature,
+          max_tokens: maxTokens,
+          stream: false,
+          thinking: { type: thinkingEnabled ? 'enabled' : 'disabled' }
+        }),
       });
       const responseText = await res.text();
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${responseText}`);
@@ -282,7 +290,7 @@ const WritersDesk = () => {
         return next;
       });
     }
-  }, [promptText, apiKey, systemPrompt, temperature, maxTokens, loadingPaperIds, immediateSave, updateActiveProject]);
+  }, [promptText, apiKey, systemPrompt, temperature, maxTokens, thinkingEnabled, loadingPaperIds, immediateSave, updateActiveProject]);
 
   // ── Drag & drop ─────────────────────────────────────────────────────────────
   const handleMouseMove = useCallback((e) => {
@@ -892,6 +900,49 @@ const WritersDesk = () => {
                     : loadingPaperIds.size > 0 ? `${loadingPaperIds.size} running`
                     : 'glm-5'}
                 </div>
+                {/* Thinking toggle */}
+                <button
+                  onClick={() => updateAiSettings({ thinkingEnabled: !thinkingEnabled })}
+                  title={thinkingEnabled ? 'Thinking: ON' : 'Thinking: OFF'}
+                  style={{
+                    background: thinkingEnabled
+                      ? 'linear-gradient(180deg, rgba(139,69,19,0.25) 0%, rgba(139,69,19,0.15) 100%)'
+                      : 'rgba(139,69,19,0.06)',
+                    border: thinkingEnabled
+                      ? '1px solid rgba(139,69,19,0.5)'
+                      : '1px solid rgba(139,69,19,0.2)',
+                    borderRadius: '6px',
+                    height: '32px',
+                    padding: '0 8px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    transition: 'all 0.2s ease',
+                    flexShrink: 0,
+                    boxShadow: 'none',
+                    WebkitBoxShadow: 'none',
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    stroke={thinkingEnabled ? 'rgba(139,69,19,0.9)' : 'rgba(62,50,40,0.4)'}
+                    strokeWidth="2">
+                    <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-5 0v-15A2.5 2.5 0 0 1 9.5 2z"/>
+                    <path d="M14.5 2A2.5 2.5 0 0 1 17 4.5v15a2.5 2.5 0 0 1-5 0v-15A2.5 2.5 0 0 1 14.5 2z"/>
+                    <path d="M9.5 7H5a2 2 0 0 0 0 4h4.5"/>
+                    <path d="M14.5 7H19a2 2 0 0 1 0 4h-4.5"/>
+                  </svg>
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: thinkingEnabled ? 'rgba(139,69,19,0.9)' : 'rgba(62,50,40,0.4)',
+                    letterSpacing: '0.3px',
+                    lineHeight: 1,
+                  }}>
+                    {thinkingEnabled ? 'think' : 'think'}
+                  </span>
+                </button>
+
                 <select
                   className="context-size-select"
                   value={maxTokens}
