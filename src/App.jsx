@@ -34,6 +34,7 @@ const WritersDesk = () => {
   const saveTimerRef = useRef(null);
   const mainAreaRef = useRef(null);
   const promptInputRef = useRef(null);
+  const paperTextareaRef = useRef(null);
   const projectsRef = useRef(projects);
   const activeProjectIdRef = useRef(activeProjectId);
   const mailRef = useRef(null);
@@ -286,6 +287,7 @@ const WritersDesk = () => {
           };
         }));
         typeDrainerRef.current = setTimeout(drainOne, 16);
+        if (paperTextareaRef.current) paperTextareaRef.current.scrollTop = paperTextareaRef.current.scrollHeight;
       };
 
       const kickDrainer = () => {
@@ -727,6 +729,7 @@ const WritersDesk = () => {
   const activeMainPaper = isDraggingTopPaper ? underlyingPaper : topPaper;
   const isStackEmpty = !activeMainPaper;
 
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen w-screen overflow-hidden relative">
@@ -907,6 +910,7 @@ const WritersDesk = () => {
 
                   {/* Main textarea */}
                   <textarea
+                    ref={paperTextareaRef}
                     className="paper-textarea writing-font w-full"
                     placeholder="Start writing..."
                     value={activeMainPaper.content}
@@ -937,7 +941,7 @@ const WritersDesk = () => {
               <textarea
                 ref={promptInputRef}
                 className="prompt-textarea"
-                placeholder="Message Writer's Desk..."
+                placeholder="Write To Muninn..."
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
                 onKeyDown={(e) => {
