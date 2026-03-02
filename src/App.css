@@ -255,7 +255,7 @@ body { font-family: 'DM Sans', sans-serif; overflow: hidden; background: #2c2416
   box-shadow: 0 10px 25px rgba(0,0,0,0.3); display: flex; align-items: center; padding: 0 16px; pointer-events: none; z-index: 9999; border: 1px solid rgba(139, 69, 19, 0.2); transform: translate(-50%, -50%) rotate(3deg);
 }
 .ghost-tab::after { content: ''; position: absolute; bottom: 10px; left: 16px; right: 16px; height: 6px; background: repeating-linear-gradient(90deg, #d4cfc0 0, #d4cfc0 8px, transparent 8px, transparent 12px); opacity: 0.6; border-radius: 2px; }
-.ghost-title { font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 14px; color: var(--scroll-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 1; }
+.ghost-title { font-family: 'Crimson Pro', serif; font-weight: 600; font-size: 14px; color: var(--scroll-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 1; }
 
 .bottom-bin { border-top: 1px solid rgba(255,255,255,0.1); transition: background 0.2s ease; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
 .bottom-bin:hover { background: rgba(0,0,0,0.3); }
@@ -372,7 +372,7 @@ body { font-family: 'DM Sans', sans-serif; overflow: hidden; background: #2c2416
     width: 100%; background: transparent; border: none; outline: none;
     font-size: 15px; color: var(--scroll-text); line-height: 1.6; resize: none;
     min-height: 24px; max-height: 200px;
-    font-family: 'DM Sans', sans-serif; overflow-y: hidden;
+    font-family: 'Crimson Pro', serif; overflow-y: hidden;
     box-shadow: none; -webkit-box-shadow: none;
 }
 .prompt-textarea::placeholder { color: rgba(62, 50, 40, 0.4); }
@@ -441,7 +441,7 @@ body { font-family: 'DM Sans', sans-serif; overflow: hidden; background: #2c2416
   border: 1px solid rgba(139, 69, 19, 0.25);
   border-radius: 6px;
   color: rgba(62, 50, 40, 0.65);
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Crimson Pro', serif;
   font-size: 13px; font-weight: 500;
   padding: 0 10px; height: 32px; width: 72px;
   cursor: pointer; outline: none;
