@@ -730,7 +730,7 @@ const WritersDesk = () => {
     dragState && dragState.type === 'paper' &&
     dragState.source.type === 'stack' &&
     dragState.paper.id === topPaper?.id;
-  const activeMainPaper = isDraggingTopPaper ? underlyingPaper : topPaper;
+  const activeMainPaper = topPaper;
   const isStackEmpty = !activeMainPaper;
 
 
@@ -817,7 +817,7 @@ const WritersDesk = () => {
                 </button>
               </div>
             ) : (
-              <div ref={mainPaperRef} key={activeMainPaper.id} className={`paper-sheet w-full h-full relative ${isDraggingTopPaper ? 'revealed' : ''}`} style={loadingPaperIds.has(activeMainPaper.id) ? { filter: 'sepia(0.18) brightness(0.97)' } : {}}>
+              <div ref={mainPaperRef} key={activeMainPaper.id} className={`paper-sheet w-full h-full relative`} style={loadingPaperIds.has(activeMainPaper.id) ? { filter: 'sepia(0.18) brightness(0.97)' } : {}}>
                 {/* Drag handle */}
                 <div
                   className="drag-handle"
@@ -859,7 +859,7 @@ const WritersDesk = () => {
                         markDirty();
                         updateActiveProject(p => {
                           const s = [...p.mainStack];
-                          const i = isDraggingTopPaper ? s.length - 2 : s.length - 1;
+                          const i = s.length - 1;
                           if (i >= 0) s[i] = { ...s[i], subject: n };
                           return { ...p, mainStack: s };
                         }, true);
