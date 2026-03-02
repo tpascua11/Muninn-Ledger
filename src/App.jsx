@@ -10,6 +10,7 @@ import ProjectSwitcherModal from './components/modals/ProjectSwitcher';
 import PromptSetupModal from './components/modals/PromptSetup';
 import ContextPreviewModal from './components/modals/ContextPreview';
 import MailAnimation from './components/MailAnimation';
+import PaperStackOnTopAnimation from './components/PaperStackOnTopAnimation';
 import ErrorModal from './components/modals/ErrorModal';
 
 const WritersDesk = () => {
@@ -39,6 +40,8 @@ const WritersDesk = () => {
   const activeProjectIdRef = useRef(activeProjectId);
   const mailRef = useRef(null);
   const promptBarRef = useRef(null);
+  const paperStackOnTopRef = useRef(null);
+  const mainPaperRef = useRef(null);
 
   // ── Typewriter queue ────────────────────────────────────────────────────────
   const typeQueueRef = useRef([]);       // pending characters to render
@@ -212,6 +215,7 @@ const WritersDesk = () => {
     // For 'new-rewrite' mode, create a fresh paper and push it to the stack first
     const newPaperId = mode === 'new-rewrite' ? generateId() : null;
     if (mode === 'new-rewrite') {
+      paperStackOnTopRef.current?.flip();
       const freshPaper = {
         id: newPaperId,
         subject: targetPaper.subject + ' (rewrite)',
@@ -813,7 +817,7 @@ const WritersDesk = () => {
                 </button>
               </div>
             ) : (
-              <div key={activeMainPaper.id} className={`paper-sheet w-full h-full relative ${isDraggingTopPaper ? 'revealed' : ''}`} style={loadingPaperIds.has(activeMainPaper.id) ? { filter: 'sepia(0.18) brightness(0.97)' } : {}}>
+              <div ref={mainPaperRef} key={activeMainPaper.id} className={`paper-sheet w-full h-full relative ${isDraggingTopPaper ? 'revealed' : ''}`} style={loadingPaperIds.has(activeMainPaper.id) ? { filter: 'sepia(0.18) brightness(0.97)' } : {}}>
                 {/* Drag handle */}
                 <div
                   className="drag-handle"
@@ -1189,6 +1193,7 @@ const WritersDesk = () => {
       />
 
       <MailAnimation ref={mailRef} anchorRef={promptBarRef} paperRef={mainAreaRef} />
+      <PaperStackOnTopAnimation ref={paperStackOnTopRef} paperRef={mainPaperRef} />
 
       <ErrorModal
         isOpen={errorModal.open}
