@@ -1,8 +1,8 @@
 # Muninn's Ledger
 
+https://ted-muninn-ledger-app.netlify.app/
 
 A context-aware writing desk for creative work. Built for people who need to juggle a lot of interconnected material and want an AI that only knows what you decide to show it.
-
 
 
 ## What it's for
