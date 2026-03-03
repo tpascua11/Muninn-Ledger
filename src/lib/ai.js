@@ -18,16 +18,20 @@ export const buildContextMessages = (project, systemPrompt, userPrompt, assistan
 
     collectFromDesk(project.leftDesk);
     collectFromDesk(project.rightDesk);
+    
+    const messages = [{ role: 'system', content: systemPrompt }];
 
-    let fullSystem = systemPrompt;
     if (contextPapers.length > 0) {
         const docs = contextPapers
             .map((p, i) => `--- Document ${i + 1}: ${p.subject} ---\n${p.content}`)
             .join('\n\n');
-        fullSystem += `\n\n== Reference Documents ==\n${docs}`;
+        
+        messages.push({ 
+            role: 'user',  
+            content: `== Reference Documents ==\n${docs}` 
+        });
     }
-
-    const messages = [{ role: 'system', content: fullSystem }];
+    
     if (assistantSeed) messages.push({ role: 'assistant', content: assistantSeed });
     if (userPrompt) messages.push({ role: 'user', content: userPrompt });
 
